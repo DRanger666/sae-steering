@@ -87,35 +87,27 @@ def handler(event):
 
         
         # ---------------------------------------------------------------------
-        # STEERING LOGIC
+        # STEERING LOGIC  — reference: §4.2, Adams et al., ICML 2025
         #
-        # Paper context:
-        # “We steer each family-specific latent and analyze the resulting
-        #  sequence changes… Steering refers to **clamping** the activation
-        #  of a specific latent to 1×, 2×, 3×, 4× its maximum value.”
-        #  – Appendix A.5
+        # Manuscript wording:
+        # “Specifically, we set the activation of a family-specific latent to
+        #  a multiple of its *maximum activation*, and continue the model’s
+        #  forward pass using the reconstructed activation.”
         #
-        # Expected behaviour:
-        #   • Pick ONE latent dimension ( dim )  
-        #   • Determine that latent’s own max-activation **within this
-        #     sequence** (or a calibrated percentile)  
-        #   • Clamp / scale ONLY that latent at positions where it fires.
+        # Expected intent:
+        #   1. Identify the *per-latent* maximum of the chosen dimension
+        #      (within this sequence) — not the global max across all latents.
+        #   2. Multiply that value by {1×, 2×, 3×, 4×} and clamp only that
+        #      latent, ideally retaining its natural sparsity pattern.
         #
         # Current implementation:
-        #   • `sae_latents.max()` / `.min()` scans **all** dims & residues,
-        #     so the reference value might come from a different latent.  
-        #   • `sae_latents[:, dim] = …` then writes the SAME constant to
-        #     every residue, erasing the latent’s natural sparsity.
+        #   • base_act = sae_latents.max() / min()  → global extreme over
+        #     *all* latents and *all* residues.
+        #   • sae_latents[:, dim] = base_act * multiplier
+        #     → broadcasts one constant to every residue, overriding locality.
         #
-        # Why this seems off:
-        #   – Family-specific latents are meant to be **local motifs**
-        #     (see Fig. 3 histogram of per-sequence **maximum activations**
-        #     that motivate their family-specificity test).
-        #   – Clobbering every position breaks that locality and could
-        #     introduce artifacts not analysed in the paper.
-        #
-        # No change made yet; these comments flag the potential issue for
-        # discussion with the authors.
+        # These comments flag the mismatch for future discussion; behaviour
+        # is left unchanged here.
         # ---------------------------------------------------------------------
 
         # Steer by setting the latent dim activation of it's max activation * multiplier
