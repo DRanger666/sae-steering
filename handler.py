@@ -85,6 +85,39 @@ def handler(event):
         esm_layer_acts_dec = sae_model.decode(sae_latents, mu, std)
         recons_error = esm_layer_acts - esm_layer_acts_dec
 
+        
+        # ---------------------------------------------------------------------
+        # STEERING LOGIC
+        #
+        # Paper context:
+        # “We steer each family-specific latent and analyze the resulting
+        #  sequence changes… Steering refers to **clamping** the activation
+        #  of a specific latent to 1×, 2×, 3×, 4× its maximum value.”
+        #  – Appendix A.5
+        #
+        # Expected behaviour:
+        #   • Pick ONE latent dimension ( dim )  
+        #   • Determine that latent’s own max-activation **within this
+        #     sequence** (or a calibrated percentile)  
+        #   • Clamp / scale ONLY that latent at positions where it fires.
+        #
+        # Current implementation:
+        #   • `sae_latents.max()` / `.min()` scans **all** dims & residues,
+        #     so the reference value might come from a different latent.  
+        #   • `sae_latents[:, dim] = …` then writes the SAME constant to
+        #     every residue, erasing the latent’s natural sparsity.
+        #
+        # Why this seems off:
+        #   – Family-specific latents are meant to be **local motifs**
+        #     (see Fig. 3 histogram of per-sequence **maximum activations**
+        #     that motivate their family-specificity test).
+        #   – Clobbering every position breaks that locality and could
+        #     introduce artifacts not analysed in the paper.
+        #
+        # No change made yet; these comments flag the potential issue for
+        # discussion with the authors.
+        # ---------------------------------------------------------------------
+
         # Steer by setting the latent dim activation of it's max activation * multiplier
         base_act = sae_latents.max() if multiplier > 0 else sae_latents.min()
         sae_latents[:, dim] = base_act * multiplier
